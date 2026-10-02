@@ -1,0 +1,88 @@
+const http = require("http");
+const { WebSocketServer } = require("ws");
+
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("Tap Coin Clicker Multiplayer Server");
+});
+
+const wss = new WebSocketServer({ server });
+
+const players = new Map();
+
+function broadcastLeaderboard() {
+  const leaderboard = [...players.values()]
+    .map((p) => ({ id: p.id, name: p.name, score: p.score, color: p.color }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 50);
+
+  const payload = JSON.stringify({
+    type: "leaderboard",
+    leaderboard,
+  });
+
+  for (const client of wss.clients) {
+    if (client.readyState === 1) {
+      client.send(payload);
+    }
+  }
+}
+
+wss.on("connection", (ws) => {
+  const id = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+
+  players.set(ws, {
+    id,
+    name: "Player",
+    score: 0,
+    color: "#7c3aed",
+  });
+
+  ws.send(
+    JSON.stringify({
+      type: "welcome",
+      id,
+    })
+  );
+
+  broadcastLeaderboard();
+
+  ws.on("message", (raw) => {
+    try {
+      const msg = JSON.parse(raw.toString());
+      if (!msg || typeof msg !== "object") return;
+
+      if (msg.type === "register") {
+        const player = players.get(ws);
+        if (!player) return;
+
+        player.name = String(msg.name || "Player").slice(0, 16);
+        player.color = msg.color || "#7c3aed";
+        player.score = Number(msg.score) || 0;
+
+        broadcastLeaderboard();
+        return;
+      }
+
+      if (msg.type === "score") {
+        const player = players.get(ws);
+        if (!player) return;
+
+        player.score = Number(msg.score) || 0;
+        broadcastLeaderboard();
+      }
+    } catch (error) {
+      // ignore invalid message
+    }
+  });
+
+  ws.on("close", () => {
+    players.delete(ws);
+    broadcastLeaderboard();
+  });
+});
+
+const PORT = 8080;
+server.listen(PORT, () => {
+  console.log(`Tap Coin Server running on ws://localhost:${PORT}`);
+});
