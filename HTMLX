@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tap Coin Clicker Multiplayer</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div>
+          <h1>Tap Coin Clicker</h1>
+          <p>Mine ore, buy upgrades, and beat the leaderboard</p>
+        </div>
+        <div class="profile-box">
+          <label for="playerName">Player Name</label>
+          <input id="playerName" maxlength="16" value="Miner" />
+          <button id="saveNameBtn">Save</button>
+        </div>
+      </header>
+
+      <main class="game-grid">
+        <section class="panel stats-panel">
+          <h2>Stats</h2>
+          <div class="stats">
+            <div class="stat">
+              <span>Coins</span>
+              <strong id="coinsView">0</strong>
+            </div>
+            <div class="stat">
+              <span>Mine Power</span>
+              <strong id="clickPowerView">1</strong>
+            </div>
+            <div class="stat">
+              <span>Auto Clickers</span>
+              <strong id="autoClickersView">0</strong>
+            </div>
+            <div class="stat">
+              <span>Coins / Sec</span>
+              <strong id="autoRateView">0</strong>
+            </div>
+            <div class="stat">
+              <span>Selected Ore</span>
+              <strong id="selectedOreView">Copper</strong>
+            </div>
+            <div class="stat">
+              <span>Total Mined</span>
+              <strong id="totalMinedView">0</strong>
+            </div>
+          </div>
+
+          <button id="mineBtn" class="mine-btn">Mine Ore</button>
+        </section>
+
+        <section class="panel shop-panel">
+          <h2>Shop</h2>
+          <div id="shopList" class="shop-list"></div>
+        </section>
+
+        <section class="panel ores-panel">
+          <h2>Ores</h2>
+          <div id="oreList" class="ore-list"></div>
+        </section>
+
+        <section class="panel leaderboard-panel">
+          <h2>Leaderboard</h2>
+          <ol id="leaderboardList"></ol>
+        </section>
+      </main>
+    </div>
+
+    <script src="game.js"></script>
+  </body>
+</html>
