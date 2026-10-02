@@ -1,0 +1,269 @@
+const ores = [
+  { name: "Copper", color: "#b87333", value: 1, unlockAt: 0 },
+  { name: "Iron", color: "#8a8a8a", value: 2, unlockAt: 40 },
+  { name: "Silver", color: "#c0c0c0", value: 5, unlockAt: 150 },
+  { name: "Gold", color: "#f4d35e", value: 12, unlockAt: 500 },
+  { name: "Ruby", color: "#ef4444", value: 25, unlockAt: 1200 },
+  { name: "Emerald", color: "#10b981", value: 60, unlockAt: 3000 },
+  { name: "Sapphire", color: "#3b82f6", value: 120, unlockAt: 7000 },
+  { name: "Diamond", color: "#7dd3fc", value: 260, unlockAt: 15000 },
+  { name: "Uranium", color: "#4ade80", value: 700, unlockAt: 35000 },
+  { name: "Mythic", color: "#f472b6", value: 1800, unlockAt: 80000 },
+];
+
+const state = {
+  coins: 0,
+  totalMined: 0,
+  clickPower: 1,
+  autoClickers: 0,
+  clickLevel: 0,
+  autoPower: 1,
+  selectedOreIndex: 0,
+  unlockedOreCount: 1,
+  playerName: localStorage.getItem("tapCoinPlayerName") || "Miner",
+};
+
+const shopItems = [
+  {
+    id: "auto",
+    name: "Auto Clicker",
+    baseCost: 25,
+    getCost: () => Math.floor(25 * Math.pow(1.55, state.autoClickers)),
+    description: "Adds automatic coin generation",
+    buy() {
+      const cost = this.getCost();
+      if (state.coins < cost) return false;
+
+      state.coins -= cost;
+      state.autoClickers += 1;
+      return true;
+    },
+  },
+  {
+    id: "click",
+    name: "Click Boost",
+    baseCost: 40,
+    getCost: () => Math.floor(40 * Math.pow(1.7, state.clickLevel)),
+    description: "Increases coins per tap",
+    buy() {
+      const cost = this.getCost();
+      if (state.coins < cost) return false;
+
+      state.coins -= cost;
+      state.clickLevel += 1;
+      state.clickPower = 1 + state.clickLevel * 1.5;
+      return true;
+    },
+  },
+  {
+    id: "speed",
+    name: "Tap Speed",
+    baseCost: 80,
+    getCost: () => Math.floor(80 * Math.pow(1.8, state.clickLevel)),
+    description: "Faster mining rhythm and better tap efficiency",
+    buy() {
+      const cost = this.getCost();
+      if (state.coins < cost) return false;
+
+      state.coins -= cost;
+      state.autoPower += 1.25;
+      return true;
+    },
+  },
+];
+
+const mineBtn = document.getElementById("mineBtn");
+const coinsView = document.getElementById("coinsView");
+const clickPowerView = document.getElementById("clickPowerView");
+const autoClickersView = document.getElementById("autoClickersView");
+const autoRateView = document.getElementById("autoRateView");
+const selectedOreView = document.getElementById("selectedOreView");
+const totalMinedView = document.getElementById("totalMinedView");
+const shopList = document.getElementById("shopList");
+const oreList = document.getElementById("oreList");
+const leaderboardList = document.getElementById("leaderboardList");
+const playerNameInput = document.getElementById("playerName");
+const saveNameBtn = document.getElementById("saveNameBtn");
+
+const socket = new WebSocket("ws://localhost:8080");
+
+function getSelectedOre() {
+  return ores[state.selectedOreIndex];
+}
+
+function unlockOresByProgress() {
+  let count = 1;
+  for (let i = 0; i < ores.length; i++) {
+    if (state.totalMined >= ores[i].unlockAt) {
+      count = i + 1;
+    }
+  }
+  state.unlockedOreCount = count;
+}
+
+function mineOre() {
+  const ore = getSelectedOre();
+  const oreValue = ore.value * state.clickPower * (1 + state.autoPower * 0.1);
+  state.coins += oreValue;
+  state.totalMined += oreValue;
+
+  unlockOresByProgress();
+
+  if (state.selectedOreIndex < state.unlockedOreCount - 1) {
+    state.selectedOreIndex = Math.min(state.selectedOreIndex + 1, state.unlockedOreCount - 1);
+  }
+
+  updateUI();
+  sendScore();
+}
+
+function buyShopItem(item) {
+  if (item.buy()) {
+    updateUI();
+    sendScore();
+  }
+}
+
+function renderShop() {
+  shopList.innerHTML = "";
+  for (const item of shopItems) {
+    const row = document.createElement("div");
+    row.className = "shop-item";
+
+    const info = document.createElement("div");
+    info.innerHTML = `
+      <strong>${item.name}</strong>
+      <small>${item.description}</small>
+      <small>Cost: ${item.getCost()} coins</small>
+    `;
+
+    const btn = document.createElement("button");
+    btn.className = "shop-btn";
+    btn.textContent = "Buy";
+    btn.disabled = state.coins < item.getCost();
+    btn.addEventListener("click", () => buyShopItem(item));
+
+    row.append(info, btn);
+    shopList.appendChild(row);
+  }
+}
+
+function renderOres() {
+  oreList.innerHTML = "";
+  for (let i = 0; i < ores.length; i++) {
+    const ore = ores[i];
+    const unlocked = i < state.unlockedOreCount;
+
+    const item = document.createElement("div");
+    item.className = "ore-item";
+
+    const info = document.createElement("div");
+    info.className = "ore-info";
+    info.innerHTML = `
+      <span class="ore-dot" style="background:${ore.color}; color:${ore.color};"></span>
+      <div>
+        <div class="ore-name">${unlocked ? ore.name : "Locked"}</div>
+        <div class="ore-meta">${unlocked ? `Value: ${ore.value} coins` : `Unlock at: ${ore.unlockAt} total mined`}</div>
+      </div>
+    `;
+
+    const btn = document.createElement("button");
+    btn.className = "ore-btn";
+    btn.textContent = unlocked ? (state.selectedOreIndex === i ? "Selected" : "Select") : "Locked";
+    btn.disabled = !unlocked || state.selectedOreIndex === i;
+
+    btn.addEventListener("click", () => {
+      if (unlocked) {
+        state.selectedOreIndex = i;
+        updateUI();
+      }
+    });
+
+    item.append(info, btn);
+    oreList.appendChild(item);
+  }
+}
+
+function renderLeaderboard(data) {
+  leaderboardList.innerHTML = "";
+  const items = data && data.length ? data : [];
+
+  items.forEach((entry, index) => {
+    const li = document.createElement("li");
+    li.textContent = `${index + 1}. ${entry.name} - ${entry.score} coins`;
+    leaderboardList.appendChild(li);
+  });
+}
+
+function updateUI() {
+  const selectedOre = getSelectedOre();
+  const autoRate = state.autoClickers * (1 + state.autoPower * 0.8);
+
+  coinsView.textContent = Math.floor(state.coins);
+  clickPowerView.textContent = Number((state.clickPower || 1)).toFixed(1);
+  autoClickersView.textContent = state.autoClickers;
+  autoRateView.textContent = Number(autoRate).toFixed(1);
+  selectedOreView.textContent = selectedOre.name;
+  totalMinedView.textContent = Math.floor(state.totalMined);
+
+  renderShop();
+  renderOres();
+}
+
+function sendScore() {
+  const payload = {
+    type: "score",
+    score: Math.floor(state.totalMined),
+  };
+
+  if (socket.readyState === 1) {
+    socket.send(JSON.stringify(payload));
+  }
+}
+
+function registerPlayer() {
+  const name = playerNameInput.value.trim() || "Miner";
+  state.playerName = name;
+  localStorage.setItem("tapCoinPlayerName", name);
+
+  if (socket.readyState === 1) {
+    socket.send(JSON.stringify({
+      type: "register",
+      name,
+      score: Math.floor(state.totalMined),
+      color: "#" + Math.floor(Math.random()*16777215).toString(16).padStart(6, "0")
+    }));
+  }
+}
+
+mineBtn.addEventListener("click", mineOre);
+saveNameBtn.addEventListener("click", registerPlayer);
+
+playerNameInput.value = state.playerName;
+
+socket.addEventListener("open", () => {
+  registerPlayer();
+});
+
+socket.addEventListener("message", (event) => {
+  try {
+    const msg = JSON.parse(event.data);
+    if (msg.type === "leaderboard") {
+      renderLeaderboard(msg.leaderboard);
+    }
+  } catch (error) {
+    // ignore
+  }
+});
+
+setInterval(() => {
+  if (state.autoClickers > 0) {
+    const autoGain = state.autoClickers * (1 + state.autoPower * 0.85);
+    state.coins += autoGain;
+    state.totalMined += autoGain;
+    updateUI();
+    sendScore();
+  }
+}, 1000);
+
+updateUI();
